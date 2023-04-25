@@ -219,6 +219,56 @@ async function calculateProof(key, secret, state, setState) {
   setState({...state, proof: proof, loading:false})
 }
 
+async function calculateProofWithUpdateRoot(key, secret, airdropAddr, state, setState) {
+  if (state.key === '' || state.secret === '')  {
+    alert("Either key or secret are missing!")
+    return
+  }
+  setState({...state, loading:true})
+
+  // Connect to wallet, get address
+  let provider = new providers.Web3Provider(window.ethereum);
+  await provider.send("eth_requestAccounts", []);
+  let signer = provider.getSigner();
+  let address = await signer.getAddress();
+
+  // Compute a commitment locally
+  let computedCommitment = toHex(await poseidon2(BigInt(key), BigInt(secret)));
+
+  // Load files and run proof locally
+  let DOMAIN = "http://localhost:3000";
+  //let mtSs = await getFileString(`${DOMAIN}/mt_8192.txt`);
+  let contract = new Contract(airdropAddr, AIRDROP_JSON.abi, provider.getSigner());
+  try {
+    let addr_str = await contract.getAllAddresses();
+    await tx.wait()
+  } catch (error) {
+    alert("get addresses failed")
+  }
+  
+  let wasmBuff = await getFileBuffer(`${DOMAIN}/circuit.wasm`);
+  let zkeyBuff = await getFileBuffer(`${DOMAIN}/circuit_final.zkey`);
+
+  // Load the Merkle Tree locally
+  let mt = MerkleTree.createFromStorageString(addr_str);
+  if (!mt.leafExists(BigInt(computedCommitment))) {
+    alert("Leaf corresponding to (key,secret) does not exist in MerkleTree.");
+    setState({...state, loading:false})
+    return;
+  }
+  
+  let preTime = new Date().getTime();
+  let biKey = BigInt(key);
+  let biSec = BigInt(secret);
+  let proof = await generateProofCallData(mt, biKey, biSec, address, wasmBuff, zkeyBuff);
+  let elapsed =  new Date().getTime() - preTime;
+  console.log(`Time to compute proof: ${elapsed}ms`);
+
+  setState({...state, proof: proof, loading:false})
+}
+
+
+
 async function collectDrop(key, airdropAddr, state, setState) {
   if (state.proof === '') {
     alert("No proof calculated yet!")

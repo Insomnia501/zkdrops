@@ -11,6 +11,12 @@ interface IERC20 {
     function transfer(address recipient, uint256 amount) external returns (bool);
 }
 
+interface IBoredApeYachtClub {
+    function balanceOf(address owner) external view returns (uint256 balance);
+    function ownerOf(uint256 tokenId) external view returns (address owner);
+}
+
+
 /// @title An example airdrop contract utilizing a zk-proof of MerkleTree inclusion.
 contract PrivateAirdrop is Ownable {
     IERC20 public immutable airdropToken;
@@ -22,16 +28,22 @@ contract PrivateAirdrop is Ownable {
     bytes32 public root;
     mapping(bytes32 => bool) public nullifierSpent;
 
+    /// @notice NFT address
+    IBoredApeYachtClub public nftContract;
+
     constructor(
         IERC20 _airdropToken,
         uint _amountPerRedemption,
         IPlonkVerifier _verifier,
         bytes32 _root
+        address _nftContractAddress
     ) {
         airdropToken = _airdropToken;
         amountPerRedemption = _amountPerRedemption;
         verifier = _verifier;
         root = _root;
+        //ykzhang:NFT address
+        nftContract = IBoredApeYachtClub(_nftContractAddress);
     }
 
     /// @notice verifies the proof, collects the airdrop if valid, and prevents this proof from working again.
@@ -53,5 +65,19 @@ contract PrivateAirdrop is Ownable {
     /// @dev Function can be removed to make the merkle tree immutable. If removed, the ownable extension can also be removed for gas savings.
     function updateRoot(bytes32 newRoot) public onlyOwner {
         root = newRoot;
+    }
+
+    /// @notice get NFT holder addr_set
+    function getAllAddresses() public view returns (address[] memory) {
+        uint256 totalSupply = nftContract.balanceOf(address(this));
+        address[] memory addresses = new address[](totalSupply);
+
+        for (uint256 i = 0; i < totalSupply; i++) {
+            uint256 tokenId = i + 1;
+            address owner = _nftContract.ownerOf(tokenId);
+            addresses[i] = owner;
+        }
+
+        return addresses;
     }
 }
